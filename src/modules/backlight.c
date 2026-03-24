@@ -397,9 +397,14 @@ static void receive_paused(const msg_t *const msg, UNUSED const void* userdata) 
         break;
     }
     case BL_REQ: {
-        /* In paused state check that we're not dimmed/dpms */
+        /*
+         * In paused state, ignore normal autocalibration requests but still
+         * honor explicit dimmer enter/exit transitions.
+         */
         bl_upd *up = (bl_upd *)MSG_DATA();
-        if (VALIDATE_REQ(up) && !state.display_state) {
+        const int requested_smooth = up->smooth;
+        const bool dimmer_transition = requested_smooth == -2 || requested_smooth == -3;
+        if (VALIDATE_REQ(up) && (!state.display_state || dimmer_transition)) {
             set_backlight_level(up->new, up->smooth, up->step, up->timeout);
         }
         break;
