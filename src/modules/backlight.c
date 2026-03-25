@@ -466,7 +466,7 @@ static int parse_bus_reply(sd_bus_message *reply, const char *member, void *user
                 r = sd_bus_message_read(reply, "sd", &mon_id, pct);
                 if (r >= 0) {
                     char key[PATH_MAX + 1];
-                    snprintf(key, sizeof(key), "/org/clightd/clightd/Backlight2/%s", mon_id);
+                    make_valid_obj_path(key, sizeof(key), "/org/clightd/clightd/Backlight2", mon_id);
                     map_put(bls, key, pct);
                 }
                 sd_bus_message_exit_container(reply);
