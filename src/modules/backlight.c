@@ -236,7 +236,8 @@ static void receive_waiting_init(const msg_t *const msg, UNUSED const void* user
              * Note: set smooth field from conf to allow keyboard and gamma to react;
              * > if (up->smooth || conf.bl_conf.no_smooth) { ... }
              */
-            set_backlight_level(1.0, !conf.bl_conf.smooth.no_smooth, 0, 0);
+            if (!conf.bl_conf.restore)
+                set_backlight_level(1.0, !conf.bl_conf.smooth.no_smooth, 0, 0);
             pause_mod(AUTOCALIB);
         }
         if (state.lid_state) {
@@ -250,6 +251,23 @@ static void receive_waiting_init(const msg_t *const msg, UNUSED const void* user
         // Store current backlight to later restore them if requested
         SYSBUS_ARG_REPLY(args, parse_bus_reply, NULL, CLIGHTD_SERVICE, "/org/clightd/clightd/Backlight2", "org.clightd.clightd.Backlight2", "Get");
         call(&args, NULL);
+
+        /*
+         * When restore_on_exit is set and auto calibration is disabled,
+         * initialize current_bl_pct from hardware so DIMMER knows
+         * the correct brightness to restore after dimming.
+         */
+        if (conf.bl_conf.no_auto_calib && conf.bl_conf.restore && map_length(bls) > 0) {
+            map_itr_t *itr = map_itr_new(bls);
+            if (itr) {
+                double *val = map_itr_get_data(itr);
+                if (val) {
+                    state.current_bl_pct = *val;
+                    DEBUG("Initial backlight level: %.2lf.\n", state.current_bl_pct);
+                }
+                free(itr);
+            }
+        }
     }
 }
 
@@ -544,6 +562,10 @@ static void publish_bl_upd(const double pct, const bool is_smooth, const double 
     M_PUB(bl_msg);
 }
 
+static int noop_reply_cb(UNUSED sd_bus_message *reply, UNUSED const char *member, UNUSED void *userdata) {
+    return 0;
+}
+
 static void set_each_brightness(double pct, const double step, const int timeout) {
     const bool restoring = pct == -1.0f;
     sensor_conf_t *sens_conf = &conf.sens_conf;
@@ -571,8 +593,14 @@ static void set_each_brightness(double pct, const double step, const int timeout
             r = call(&args, "d(du)", real_pct, step, timeout);
         } else {
             DEBUG("Using default curve for '%s'\n", mon_id);
-            /* Use non-adjusted (default) curve value */
-            r = call(&args, "d(du)", restoring ? *val : pct, step, timeout);
+            if (restoring) {
+                /* Synchronous call to ensure completion before exit */
+                SYSBUS_ARG_REPLY(sync_args, noop_reply_cb, NULL, CLIGHTD_SERVICE, path, "org.clightd.clightd.Backlight2.Server", "Set");
+                r = call(&sync_args, "d(du)", *val, step, timeout);
+            } else {
+                /* Use non-adjusted (default) curve value */
+                r = call(&args, "d(du)", pct, step, timeout);
+            }
         }
         if (r < 0) {
             WARN("Failed to set backlight on %s.\n", mon_id);
