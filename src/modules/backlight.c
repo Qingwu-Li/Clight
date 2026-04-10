@@ -460,9 +460,9 @@ static int parse_bus_reply(sd_bus_message *reply, const char *member, void *user
     } else if (!strcmp(member, "Get")) {
         r = sd_bus_message_enter_container(reply, SD_BUS_TYPE_ARRAY, "(sd)");
         if (r == 1) {
-            while ((r = sd_bus_message_enter_container(reply, SD_BUS_TYPE_STRUCT, "sd") == 1)) {
+            while ((r = sd_bus_message_enter_container(reply, SD_BUS_TYPE_STRUCT, "sd")) == 1) {
                 const char *mon_id = NULL;
-                double *pct = malloc(sizeof(double)),
+                double *pct = malloc(sizeof(double));
                 r = sd_bus_message_read(reply, "sd", &mon_id, pct);
                 if (r >= 0) {
                     char key[PATH_MAX + 1];
