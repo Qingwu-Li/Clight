@@ -771,6 +771,16 @@ static int on_bl_changed(sd_bus_message *m, UNUSED void *userdata, UNUSED sd_bus
     
     DEBUG("Backlight '%s' level updated: %.2lf.\n", syspath, pct);
     
+    /* Keep bls map in sync for restore_on_exit, but skip dimmed/dpms states */
+    if (!state.display_state) {
+        char key[PATH_MAX + 1];
+        make_valid_obj_path(key, sizeof(key), "/org/clightd/clightd/Backlight2", syspath);
+        double *val = map_get(bls, key);
+        if (val) {
+            *val = pct;
+        }
+    }
+
     /* Publish a single bl update event on multimonitor setups */
     if (!strcmp(backlight_interface, syspath)) {
         publish_bl_upd(pct, false, 0, 0);
